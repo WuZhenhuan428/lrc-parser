@@ -84,15 +84,26 @@ public:
      * @brief get parsed data
      * @return reference of parsed data (m_data)
      */
-    const LrcFile& getData();
+    const LrcFile& getData() const;
     
     /**
      * @brief move parsed data to left, then release m_data
      * @return parsed data
      * @note if there is non-stl member within the struct, `clear()` is necessary.
-     * @details this method implements move semantics through std::move
+     * @warning if use this method, getters will be lose efficacy
      */
     LrcFile moveData();
+
+    /**
+     * @return m_data.lyrics.size()
+     */
+    const size_t getUnitCount() const;
+
+    /**
+     * @return number of lines (not lrc unit)
+     * separate by line break `(\n)`. if the last line is not empty after trim, count increment automatically
+     */
+    const size_t getRowCount() const;
 
 private:
     /**

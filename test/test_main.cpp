@@ -37,7 +37,7 @@ int main(int argc, char** argv) {
     if (!parser.parseFile(filepath, "UTF-8")) {
         std::cout << "[PARSE] Failed to parse file.\n";
     } else {
-        data = parser.moveData();
+        data = parser.getData();
         std::cout << "[PARSE] al    : " << data.metadata.album << "\n";
         std::cout << "[PARSE] ar    : " << data.metadata.artist << "\n";
         std::cout << "[PARSE] offset: " << data.metadata.offset << "\n";
@@ -46,4 +46,6 @@ int main(int argc, char** argv) {
             std::cout << "<" << lrc.time_ms << ">" << lrc.text;
         }
     }
+    std::cout << "\nNumber of lines: " << parser.getRowCount() << "\n";
+    std::cout << "Number of units: " << parser.getUnitCount() << "\n";
 }

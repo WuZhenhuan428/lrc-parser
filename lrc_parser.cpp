@@ -17,7 +17,7 @@ void LrcParser::clear() {
     m_data.metadata = LrcMetadata();
 }
 
-const LrcFile& LrcParser::getData() {
+const LrcFile& LrcParser::getData() const {
     return m_data;
 }
 
@@ -25,6 +25,24 @@ LrcFile LrcParser::moveData() {
     LrcFile result = std::move(m_data);
     clear();
     return result;
+}
+
+const size_t LrcParser::getUnitCount() const {
+    return m_data.lyrics.size();
+}
+
+const size_t LrcParser::getRowCount() const {
+    size_t cnt = 0;
+    for (const auto& it : m_data.lyrics) {
+        if (it.text.find('\n') != std::string::npos) {
+            cnt++;
+        }
+    }
+    const auto& final = m_data.lyrics.end();
+    if (!final->text.empty()) {
+        cnt++;
+    }
+    return cnt;
 }
 
 bool LrcParser::parseFile(const std::string& filepath, const std::string& dst_encoding) {
