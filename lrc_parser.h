@@ -97,13 +97,13 @@ public:
     /**
      * @return m_data.lyrics.size()
      */
-    const size_t getUnitCount() const;
+    size_t getUnitCount() const;
 
     /**
      * @return number of lines (not lrc unit)
      * separate by line break `(\n)`. if the last line is not empty after trim, count increment automatically
      */
-    const size_t getRowCount() const;
+    size_t getRowCount() const;
 
 private:
     /**

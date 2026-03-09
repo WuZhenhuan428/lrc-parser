@@ -27,11 +27,11 @@ LrcFile LrcParser::moveData() {
     return result;
 }
 
-const size_t LrcParser::getUnitCount() const {
+size_t LrcParser::getUnitCount() const {
     return m_data.lyrics.size();
 }
 
-const size_t LrcParser::getRowCount() const {
+size_t LrcParser::getRowCount() const {
     size_t cnt = 0;
     for (const auto& it : m_data.lyrics) {
         if (it.text.find('\n') != std::string::npos) {
