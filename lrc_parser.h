@@ -82,16 +82,12 @@ public:
      */
     LrcFile moveData();
 
-    /**
-     * @return m_data.lyrics.size()
-     */
-    size_t getUnitCount() const;
 
     /**
      * @return number of lines (not lrc unit)
      * separate by line break `(\n)`. if the last line is not empty after trim, count increment automatically
      */
-    size_t getRowCount() const;
+    static size_t getRowCount(const LrcFile& lrc);
 
     static LrcFile wordToLine(const LrcFile& lrc);
 

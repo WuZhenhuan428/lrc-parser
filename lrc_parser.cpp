@@ -60,22 +60,18 @@ LrcParser::LrcFile LrcParser::moveData() {
     return result;
 }
 
-size_t LrcParser::getUnitCount() const {
-    return m_data.lyrics.size();
-}
-
-size_t LrcParser::getRowCount() const {
-    if (m_data.lyrics.empty()) {
+size_t LrcParser::getRowCount(const LrcFile& lrc) {
+    if (lrc.lyrics.empty()) {
         return 0;
     }
 
     size_t cnt = 0;
-    for (const auto& it : m_data.lyrics) {
+    for (const auto& it : lrc.lyrics) {
         if (it.text.find('\n') != std::string::npos) {
             cnt++;
         }
     }
-    const auto& final = m_data.lyrics.back();
+    const auto& final = lrc.lyrics.back();
     if (!final.text.empty()) {
         cnt++;
     }
