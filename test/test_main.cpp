@@ -1,7 +1,10 @@
+// manual test
+
 #include "../lrc_parser.h"
 
 #include <iostream>
 #include <fstream>
+#include <sstream>
 #include <string>
 
 // usage:
@@ -33,8 +36,8 @@ int main(int argc, char** argv) {
     file.close();
     
     LrcParser parser;
-    LrcFile data;
-    if (!parser.parseFile(filepath, "UTF-8")) {
+    LrcParser::LrcFile data;
+    if (!parser.parseFile(filepath)) {
         std::cout << "[PARSE] Failed to parse file.\n";
     } else {
         data = parser.getData();

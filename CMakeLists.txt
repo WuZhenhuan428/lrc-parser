@@ -20,3 +20,10 @@ target_link_libraries(lrc_parser PUBLIC
     Iconv::Iconv
     PkgConfig::UCHARDET
 )
+
+include(CTest)
+
+add_executable(lrc_parser_test test/lrc_parser_test.cpp)
+target_link_libraries(lrc_parser_test PRIVATE lrc_parser)
+
+add_test(NAME lrc_parser_core_test COMMAND lrc_parser_test)
