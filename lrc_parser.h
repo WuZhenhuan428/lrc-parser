@@ -2,20 +2,20 @@
 
 #include <cstdint>
 #include <string>
-#include <vector>
 #include <unordered_map>
-
+#include <vector>
 
 /**
-* @brief parse the lrc file and output it in the LrcFile format
-*/
+ * @brief parse the lrc file and output it in the LrcFile format
+ */
 class LrcParser
 {
 public:
-    enum class LrcType {    // todo: duet
+    enum class LrcType
+    { // todo: duet
         Unknown = 0,
         LineSync,
-        WordSync
+        WordSync,
     };
 
     /**
@@ -23,11 +23,12 @@ public:
      */
     struct LrcMetadata
     {
-        std::string title;      ///< lrc key: ti
-        std::string artist;     ///< lrc key: ar
-        std::string album;      ///< lrc key: al
-        int64_t offset = 0;     ///< format: [offset:+-ms]
-        std::unordered_map<std::string, std::string> attributes;    ///< other metadata
+        std::string title;  ///< lrc key: ti
+        std::string artist; ///< lrc key: ar
+        std::string album;  ///< lrc key: al
+        int64_t offset = 0; ///< format: [offset:+-ms]
+        std::unordered_map<std::string, std::string>
+            attributes; ///< other attributes' set
     };
 
     struct LrcUnit
@@ -36,15 +37,20 @@ public:
         std::string text;
     };
 
-    struct LrcFile {
+    struct LrcFile
+    {
         LrcMetadata metadata;
         std::vector<LrcUnit> lyrics;
         LrcParser::LrcType type = LrcType::Unknown;
     };
 
-public:
-    LrcParser();
-    ~LrcParser();
+    LrcParser()                                 = default;
+    ~LrcParser()                                = default;
+
+    LrcParser& operator=(const LrcParser& copy) = delete;
+    LrcParser(const LrcParser& copy)            = delete;
+    LrcParser& operator=(LrcParser&& move)      = delete;
+    LrcParser(LrcParser&& move)                 = delete;
 
     /**
      * @brief clear result
@@ -57,7 +63,7 @@ public:
      * @return status of parsing file
      * @note Internal storage is always UTF-8.
      */
-    bool parseFile(const std::string& filepath);
+    bool parse_file(const std::string& filepath);
 
     /**
      * @brief parse input raw data directly
@@ -65,67 +71,75 @@ public:
      * @return status of parsing raw data
      * @note Internal storage is always UTF-8.
      */
-    bool parseString(const std::string& context);
+    bool parse_string(const std::string& context);
 
-    
     /**
      * @brief get parsed data
-     * @return reference of parsed data (m_data)
+     * @return reference of parsed data (data_)
      */
-    const LrcFile& getData() const;
-    
+    const LrcFile& get_data() const;
+
     /**
-     * @brief move parsed data to left, then release m_data
+     * @brief get formatted text from parsed LrcFile
+     * @return formatted lrc text
+     */
+    std::string format() const;
+
+    /**
+     * @brief move parsed data to left, then release data_
      * @return parsed data
-     * @note if there is non-stl member within the struct, `clear()` is necessary.
+     * @note if there is non-stl member within the struct, `clear()` is
+     * necessary.
      * @warning if use this method, getters will be lose efficacy
      */
-    LrcFile moveData();
-
+    LrcFile move_data();
 
     /**
      * @return number of lines (not lrc unit)
-     * separate by line break `(\n)`. if the last line is not empty after trim, count increment automatically
+     * separate by line break `(\n)`. if the last line is not empty after trim,
+     * count increment automatically
      */
-    static size_t getRowCount(const LrcFile& lrc);
+    static size_t get_row_count(const LrcFile& lrc);
 
-    static LrcFile wordToLine(const LrcFile& lrc);
+    static LrcFile word_to_line(const LrcFile& lrc);
 
     /**
      * @brief convert UTF-8 lrc data to target encoding
      * @param lrc [in] input lrc file (UTF-8 text)
      * @param dst_encoding [in] iconv-compatible target encoding name
-     * @return converted copy; if conversion of a field fails, keeps original field
+     * @return converted copy; if conversion of a field fails, keeps original
+     * field
      */
-    static LrcFile convertEncoding(const LrcFile& lrc, const std::string& dst_encoding);
+    static LrcFile convert_encoding(const LrcFile& lrc,
+                                    const std::string& dst_encoding);
 
 private:
     /**
      * @brief parse the input raw data through the default enconding type
      * @note method `clear()` will execute automatically
      */
-    bool parse(const std::string& raw_lrc_content);
+    bool parse(const std::string& raw_data);
 
     /**
      * @brief replace CRLF/CR with LF
      * @param content [in] the text to be processed
      * @return unix newline style raw data
      */
-    static std::string normalizeLineEnding(const std::string& content);
+    static std::string normalize_line_ending(const std::string& content);
 
     /**
      * @brief detect enconding format through libuchardet
      * @param raw_data [in] raw data of text
      * @return name of charset on success and "" on failure
      */
-    static std::string detectEncoding(const std::string& raw_data);
+    static std::string detect_encoding(const std::string& raw_data);
 
     /**
      * @brief matching iconv name if not same with uchardet
      * @param enconding_name [in] from uchardet
      * @warning table incomplete, no error handling
      */
-    static std::string mapUchardetToIconv(const std::string& enconding_name);
+    static std::string map_uchardet_to_iconv(const std::string& enconding_name);
 
     /**
      * @brief convert src_charset to dst_charset
@@ -134,16 +148,18 @@ private:
      * @param src_charset [in] source encoding format, must be iconv name
      * @todo manually control whether to rebain the bom if use UTF-8
      */
-    static std::string convertFormat(const std::string& raw_data, const std::string& dst_charset, const std::string& src_charset);
-
+    static std::string convert_format(std::string raw_data,
+                                      const std::string& dst_charset,
+                                      const std::string& src_charset);
 
     /**
      * @brief parse timestamp `[mm:ss.xx]` -> ms
-     * @param timestamp [in] timestamp format: standard lrc format without brackets
+     * @param timestamp [in] timestamp format: standard lrc format without
+     * brackets
      * @return the number of ms of the timestamp
      * @return -1 if parse failed
      */
-    int64_t parseTimestamp(const std::string& timestamp);
+    static int64_t parse_timestamp(const std::string& timestamp);
 
     /**
      * @brief pase lrc metadata tag
@@ -151,12 +167,11 @@ private:
      * @return true: successed to parse
      * @return false: failed to parse
      */
-    bool parseTag(const std::string& tag);
+    bool parse_tag(const std::string& tag);
 
-    LrcType detectLrcType(const std::vector<LrcUnit>& lyrics);
+    static LrcType detect_lrc_type(const std::vector<LrcUnit>& lyrics);
 
-    size_t count_visible_chars(const std::string& str);
+    static size_t count_visible_chars(const std::string& str);
 
-
-    LrcFile m_data;
+    LrcFile data_;
 };

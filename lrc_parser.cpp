@@ -1,21 +1,24 @@
 #include "lrc_parser.h"
 
-#include <regex>
-#include <cerrno>
-#include <cstring>
-#include <algorithm>
-#include <cctype>
-
-#include <iostream>
-#include <fstream>
-#include <sstream>
-#include <utility>
-
 #include <iconv.h>
 #include <uchardet/uchardet.h>
 
-namespace {
-bool iequals(const std::string& a, const std::string& b) {
+#include <algorithm>
+#include <cctype>
+#include <cerrno>
+#include <cstring>
+#include <format>
+#include <fstream>
+#include <iostream>
+#include <ranges>
+#include <regex>
+#include <sstream>
+#include <utility>
+
+namespace
+{
+bool iequals(const std::string& a, const std::string& b)
+{
     if (a.size() != b.size()) {
         return false;
     }
@@ -28,46 +31,97 @@ bool iequals(const std::string& a, const std::string& b) {
     return true;
 }
 
-std::string trimUtf8Bom(const std::string& s) {
-    if (s.size() >= 3 &&
-        static_cast<unsigned char>(s[0]) == 0xEF &&
+std::string trim_utf8_bom(const std::string& s)
+{
+    if (s.size() >= 3 && static_cast<unsigned char>(s[0]) == 0xEF &&
         static_cast<unsigned char>(s[1]) == 0xBB &&
         static_cast<unsigned char>(s[2]) == 0xBF) {
         return s.substr(3);
     }
     return s;
 }
-}  // namespace
+} // namespace
 
-
-LrcParser::LrcParser() {}
-LrcParser::~LrcParser() {}
-
-
-void LrcParser::clear() {
-    m_data.lyrics.clear();
-    m_data.metadata = LrcMetadata{};
-    m_data.type = LrcType::Unknown;
+void LrcParser::clear()
+{
+    data_.lyrics.clear();
+    data_.metadata = LrcMetadata{};
+    data_.type     = LrcType::Unknown;
 }
 
-const LrcParser::LrcFile& LrcParser::getData() const {
-    return m_data;
+const LrcParser::LrcFile& LrcParser::get_data() const
+{
+    return data_;
 }
 
-LrcParser::LrcFile LrcParser::moveData() {
-    LrcFile result = std::move(m_data);
+std::string LrcParser::format() const
+{
+    if (this->data_.type == LrcType::Unknown) {
+        return {};
+    }
+    std::stringstream ss;
+    // attributes
+    const auto& meta   = data_.metadata;
+    bool has_attribute = false;
+    if (!meta.title.empty()) {
+        ss << std::format("[ti:{}]\n", meta.title);
+        has_attribute = true;
+    }
+    if (!meta.artist.empty()) {
+        ss << std::format("[ar:{}]\n", meta.artist);
+        has_attribute = true;
+    }
+    if (!meta.album.empty()) {
+        ss << std::format("[al:{}]\n", meta.album);
+        has_attribute = true;
+    }
+    if (meta.offset != 0) {
+        ss << std::format("[offset:{}]\n", meta.offset);
+        has_attribute = true;
+    }
+    if (!meta.attributes.empty()) {
+        for (const auto& [k, v] : meta.attributes) {
+            ss << std::format("[{}:{}]\n", k, v);
+        }
+        has_attribute = true;
+    }
+    if (has_attribute) {
+        ss << "\n";
+    };
+    // texts
+    const auto& lrc = data_.lyrics;
+    for (const auto& [ms, text] : lrc) {
+        uint64_t ms_tail  = ms % 1000;
+        uint64_t sec      = ms / 1000;
+        uint64_t sec_tail = sec % 60;
+        uint64_t min      = sec / 60;
+        uint64_t min_tail = min % 60;
+        uint64_t hour     = min / 60;
+        // "[HH:MM:SS.mmm] text"
+        // text contains '\n'
+        ss << std::format("[{}{:02}:{:02}.{:03}] {}",
+                          hour == 0 ? "" : std::format("{:02}:", hour),
+                          min_tail, sec_tail, ms_tail, text);
+    }
+    return ss.str();
+}
+
+LrcParser::LrcFile LrcParser::move_data()
+{
+    LrcFile result = std::move(data_);
     clear();
     return result;
 }
 
-size_t LrcParser::getRowCount(const LrcFile& lrc) {
+size_t LrcParser::get_row_count(const LrcFile& lrc)
+{
     if (lrc.lyrics.empty()) {
         return 0;
     }
 
     size_t cnt = 0;
     for (const auto& it : lrc.lyrics) {
-        if (it.text.find('\n') != std::string::npos) {
+        if (it.text.contains('\n')) {
             cnt++;
         }
     }
@@ -78,7 +132,8 @@ size_t LrcParser::getRowCount(const LrcFile& lrc) {
     return cnt;
 }
 
-bool LrcParser::parseFile(const std::string& filepath) {
+bool LrcParser::parse_file(const std::string& filepath)
+{
     std::fstream file;
     file.open(filepath, std::ios::in | std::ios::binary);
     if (!file) {
@@ -90,15 +145,16 @@ bool LrcParser::parseFile(const std::string& filepath) {
     std::string raw_data = buffer.str();
     file.close();
 
-    if (!parseString(raw_data)) {
+    if (!parse_string(raw_data)) {
         return false;
     }
     return true;
 }
 
-bool LrcParser::parseString(const std::string& context) {
-    std::string unix_raw = normalizeLineEnding(context);
-    std::string iconv_enc = mapUchardetToIconv(detectEncoding(unix_raw));
+bool LrcParser::parse_string(const std::string& context)
+{
+    std::string unix_raw  = normalize_line_ending(context);
+    std::string iconv_enc = map_uchardet_to_iconv(detect_encoding(unix_raw));
     if (iconv_enc.empty()) {
         iconv_enc = "UTF-8";
     }
@@ -107,14 +163,15 @@ bool LrcParser::parseString(const std::string& context) {
     if (iequals(iconv_enc, "UTF-8") || iequals(iconv_enc, "ASCII")) {
         utf8_raw = unix_raw;
     } else {
-        utf8_raw = convertFormat(unix_raw, "UTF-8", iconv_enc);
+        utf8_raw = convert_format(unix_raw, "UTF-8", iconv_enc);
         if (utf8_raw.empty() && !unix_raw.empty()) {
-            std::cerr << "[WARNING] Failed to convert source text to UTF-8: " << iconv_enc << "\n";
+            std::cerr << "[WARNING] Failed to convert source text to UTF-8: "
+                      << iconv_enc << "\n";
             return false;
         }
     }
 
-    utf8_raw = trimUtf8Bom(utf8_raw);
+    utf8_raw = trim_utf8_bom(utf8_raw);
     if (!parse(utf8_raw)) {
         std::cout << "[WARNING] Failed to parse lrc context";
         return false;
@@ -122,8 +179,8 @@ bool LrcParser::parseString(const std::string& context) {
     return true;
 }
 
-
-std::string LrcParser::normalizeLineEnding(const std::string& content) {
+std::string LrcParser::normalize_line_ending(const std::string& content)
+{
     std::string data = content;
     std::regex crlf("\r\n");
     data = std::regex_replace(data, crlf, "\n");
@@ -132,14 +189,16 @@ std::string LrcParser::normalizeLineEnding(const std::string& content) {
     return data;
 }
 
-std::string LrcParser::detectEncoding(const std::string& raw_data) {
+std::string LrcParser::detect_encoding(const std::string& raw_data)
+{
     uchardet_t ud = uchardet_new();
-    int ret_code;
-    ret_code = uchardet_handle_data(ud, raw_data.c_str(), raw_data.size());
+    int ret_code  = uchardet_handle_data(ud, raw_data.c_str(), raw_data.size());
     if (0 != ret_code) {
-        std::cerr << "[INFO] Failed to detevt file's encoding format, error code=" << ret_code << "\n";
+        std::cerr
+            << "[INFO] Failed to detect file's encoding format, error code="
+            << ret_code << "\n";
         uchardet_delete(ud);
-        return std::string();
+        return {};
     }
     uchardet_data_end(ud);
     std::string encoding = uchardet_get_charset(ud);
@@ -147,28 +206,45 @@ std::string LrcParser::detectEncoding(const std::string& raw_data) {
     return encoding;
 }
 
-std::string LrcParser::mapUchardetToIconv(const std::string& enconding_name) {
+std::string LrcParser::map_uchardet_to_iconv(const std::string& enconding_name)
+{
     const auto& enc = enconding_name;
     // some common coding name;
-    if (enc == "Windows-1250") return "CP1250";
-    if (enc == "Windows-1251") return "CP1251";
-    if (enc == "Windows-1252") return "CP1252";
-    if (enc == "Windows-1253") return "CP1253";
-    if (enc == "Windows-1255") return "CP1255";
-    if (enc == "Windows-1257") return "CP1257";
+    if (enc == "Windows-1250") {
+        return "CP1250";
+    }
+    if (enc == "Windows-1251") {
+        return "CP1251";
+    }
+    if (enc == "Windows-1252") {
+        return "CP1252";
+    }
+    if (enc == "Windows-1253") {
+        return "CP1253";
+    }
+    if (enc == "Windows-1255") {
+        return "CP1255";
+    }
+    if (enc == "Windows-1257") {
+        return "CP1257";
+    }
     // uchardet only: Windows-1258
     // iconv only: CP1254 CP1256
     return enc;
 }
 
-std::string LrcParser::convertFormat(const std::string& raw_data, const std::string& dst_charset, const std::string& src_charset) {
+std::string LrcParser::convert_format(std::string raw_data,
+                                      const std::string& dst_charset,
+                                      const std::string& src_charset)
+{
     if (dst_charset == src_charset) {
         return raw_data;
     }
 
     iconv_t conv = iconv_open(dst_charset.c_str(), src_charset.c_str());
     if (conv == (iconv_t)(-1)) {
-        std::cerr << "[ERROR] iconv_open failed: " << strerror(errno) << "(" << src_charset << "->" << dst_charset << ")\n";
+        std::cerr << "[ERROR] iconv_open failed: " << strerror(errno) << "("
+                  << src_charset << "->" << dst_charset << ")\n";
         return "";
     }
     std::string ret_str;
@@ -181,36 +257,39 @@ std::string LrcParser::convertFormat(const std::string& raw_data, const std::str
     const size_t buf_size = 4096;
     std::vector<char> output_buffer(buf_size);
 
-    char* in_buf = const_cast<char*>(raw_data.c_str());
+    char* in_buf         = const_cast<char*>(raw_data.c_str());
     size_t in_bytes_left = in_len;
-    
+
     while (in_bytes_left > 0) {
-        char* out_buf = output_buffer.data();
+        char* out_buf         = output_buffer.data();
         size_t out_bytes_left = output_buffer.size();
 
-        size_t result = iconv(conv, &in_buf, &in_bytes_left, &out_buf, &out_bytes_left);
+        size_t result =
+            iconv(conv, &in_buf, &in_bytes_left, &out_buf, &out_bytes_left);
 
         size_t bytes_written = output_buffer.size() - out_bytes_left;
         if (bytes_written > 0) {
             ret_str.append(output_buffer.data(), bytes_written);
         }
 
-        if ((size_t)(-1) == result) {
+        if (static_cast<size_t>(-1) == result) {
             if (errno == E2BIG) {
                 // buffer is full
                 continue;
-            } else if (errno == EILSEQ) {
+            }
+            if (errno == EILSEQ) {
                 // meet invalid str
                 // deal: ignore this and replace with `?`
                 in_buf++;
                 in_bytes_left--;
                 ret_str.push_back('?');
-                iconv(conv, NULL, NULL, NULL, NULL);
+                iconv(conv, nullptr, nullptr, nullptr, nullptr);
             } else if (errno == EINVAL) {
                 std::cerr << "[WARNING] Incomplete sequence at end of string\n";
                 break;
             } else {
-                std::cerr << "[ERROR] iconv failed: " << strerror(errno) << "\n";
+                std::cerr << "[ERROR] iconv failed: " << strerror(errno)
+                          << "\n";
                 break;
             }
         }
@@ -220,16 +299,16 @@ std::string LrcParser::convertFormat(const std::string& raw_data, const std::str
     return ret_str;
 }
 
-
-bool LrcParser::parse(const std::string& raw_data) {
+bool LrcParser::parse(const std::string& raw_data)
+{
     ///< 1. token split
     // format of token = `[tag] text`
     // if multiple tags reuse a piece of text, tags will be splited
     clear();
     std::vector<LrcUnit> separated_units;
-    std::vector<int64_t> pending_timestamps;    // 暂存复用的时间戳
+    std::vector<int64_t> pending_timestamps; // 暂存复用的时间戳
 
-    size_t cursor = 0;
+    size_t cursor        = 0;
 
     size_t first_bracket = raw_data.find('[', cursor);
     if (first_bracket == std::string::npos) {
@@ -244,18 +323,20 @@ bool LrcParser::parse(const std::string& raw_data) {
             // error: no matching right bracket
             closing_bracket = raw_data.size();
         } else {
-            std::string tag_content = raw_data.substr(cursor+1, closing_bracket-cursor-1);
-            int64_t ts = parseTimestamp(tag_content);
+            std::string tag_content =
+                raw_data.substr(cursor + 1, closing_bracket - cursor - 1);
+            int64_t ts = parse_timestamp(tag_content);
             if (-1 != ts) {
                 // is timestamp
                 pending_timestamps.push_back(ts);
-            } else {    // is metadata
-                if (!parseTag(tag_content)) {
-                    std::cerr << "[ERROR] Failed to parse tag: " << tag_content << "\n";
+            } else { // is metadata
+                if (!parse_tag(tag_content)) {
+                    std::cerr << "[ERROR] Failed to parse tag: " << tag_content
+                              << "\n";
                 }
             }
 
-            cursor = closing_bracket + 1;   // after '['
+            cursor = closing_bracket + 1; // after '['
         }
 
         ///< 2. extract text (until next '[' or EOF)
@@ -270,25 +351,25 @@ bool LrcParser::parse(const std::string& raw_data) {
             // @todo trim
             if (!pending_timestamps.empty()) {
                 for (int64_t ts : pending_timestamps) {
-                    separated_units.push_back({(uint64_t)ts, text});
+                    separated_units.push_back(
+                        {static_cast<uint64_t>(ts), text});
                 }
                 pending_timestamps.clear();
             }
         }
         cursor = next_bracket;
     }
-    std::sort(separated_units.begin(), separated_units.end(),[](const LrcUnit& a, const LrcUnit& b){
-        return a.time_ms < b.time_ms;
-    });
-    m_data.lyrics = std::move(separated_units);
+    std::ranges::sort(separated_units, {}, &LrcUnit::time_ms);
+    data_.lyrics = std::move(separated_units);
 
     ///< detect lrc type, see `LrcParser::LrcType`
-    m_data.type = detectLrcType(m_data.lyrics);
+    data_.type   = detect_lrc_type(data_.lyrics);
 
-    return !m_data.lyrics.empty();
+    return !data_.lyrics.empty();
 }
 
-int64_t LrcParser::parseTimestamp(const std::string& timestamp) {
+int64_t LrcParser::parse_timestamp(const std::string& timestamp)
+{
     if (timestamp.empty()) {
         return -1;
     }
@@ -304,7 +385,8 @@ int64_t LrcParser::parseTimestamp(const std::string& timestamp) {
         int secs = std::stoi(matches[2]);
 
         if (mins < 0 || secs < 0 || secs >= 60) {
-            std::cout << "[WARNING] Invalid format: timestamp(s) out of range\n";
+            std::cout
+                << "[WARNING] Invalid format: timestamp(s) out of range\n";
             return -1;
         }
 
@@ -318,23 +400,23 @@ int64_t LrcParser::parseTimestamp(const std::string& timestamp) {
             } else if (ms_str.length() == 1) {
                 ms = std::stoi(ms_str) * 100;
             } else {
-                std::cout << "[WARNING] Invalid format: unsupported millisecond format";
+                std::cout << "[WARNING] Invalid format: unsupported "
+                             "millisecond format";
                 return -1;
             }
-            
+
             if (ms < 0 || ms >= 1000) {
                 return -1;
             }
         }
-        return (mins*60 + secs) * 1000 + ms;
-    }
-    catch(const std::exception& e)
-    {
+        return (((mins * 60) + secs) * 1000) + ms;
+    } catch (const std::exception& e) {
         return -1;
     }
 }
 
-bool LrcParser::parseTag(const std::string& tag) {
+bool LrcParser::parse_tag(const std::string& tag)
+{
     // tag format: `type:data`
     size_t colon = tag.find(':');
     if (colon == std::string::npos) {
@@ -345,74 +427,84 @@ bool LrcParser::parseTag(const std::string& tag) {
     std::string data = tag.substr(colon + 1);
 
     if (type == "ti") {
-        m_data.metadata.title = data;
+        data_.metadata.title = data;
     } else if (type == "ar") {
-        m_data.metadata.artist = data;
+        data_.metadata.artist = data;
     } else if (type == "al") {
-        m_data.metadata.album = data;
+        data_.metadata.album = data;
     } else if (type == "offset") {
         std::string offset_time_str;
-        bool isPositive;
+        bool is_positive = true;
         if (data.empty()) {
-            m_data.metadata.offset = 0;
+            data_.metadata.offset = 0;
             return true;
         }
 
         if (data.at(0) == '-') {
-            isPositive = false;
+            is_positive     = false;
             offset_time_str = data.substr(1);
         } else if (data.at(0) == '+') {
-            isPositive = true;
+            is_positive     = true;
             offset_time_str = data.substr(1);
         } else {
-            isPositive = true;
+            is_positive     = true;
             offset_time_str = data;
         }
         int64_t time_ms = 0;
         try {
             time_ms = std::stoll(offset_time_str);
-        } catch (...) { time_ms = 0; }
-        m_data.metadata.offset = isPositive ? time_ms : -time_ms ;
-    }
-    else {
-        m_data.metadata.attributes[type] = data;
+        } catch (...) {
+            time_ms = 0;
+        }
+        data_.metadata.offset = is_positive ? time_ms : -time_ms;
+    } else {
+        data_.metadata.attributes[type] = data;
     }
     return true;
 }
 
-
-LrcParser::LrcType LrcParser::detectLrcType(const std::vector<LrcUnit>& lyrics) {
+LrcParser::LrcType
+LrcParser::detect_lrc_type(const std::vector<LrcUnit>& lyrics)
+{
     using LrcType = LrcParser::LrcType;
     using LrcUnit = LrcParser::LrcUnit;
 
-    if (lyrics.empty())
+    if (lyrics.empty()) {
         return LrcType::Unknown;
+    }
 
-    double total_duration = (lyrics.back().time_ms - lyrics.front().time_ms) / 1000.0;
-    if (total_duration <= 0.1)  // too short
+    double total_duration =
+        (static_cast<double>(lyrics.back().time_ms - lyrics.front().time_ms)) /
+        1000.0;
+    if (total_duration <= 0.1) { // too short
         return LrcType::Unknown;
-    
-    double density = lyrics.size() / total_duration;
+    }
 
-    if (density > 1.2)
+    double density = static_cast<double>(lyrics.size()) / total_duration;
+
+    if (density > 1.2) {
         return LrcType::WordSync;
-    if (density < 0.6)
+    }
+    if (density < 0.6) {
         return LrcType::LineSync;
-    
+    }
+
     // number of char / number of labels
     size_t total_chars = 0;
     for (const LrcUnit& unit : lyrics) {
         total_chars += count_visible_chars(unit.text);
     }
 
-    double char_per_tag = static_cast<double>(total_chars) / lyrics.size();
+    double char_per_tag =
+        static_cast<double>(total_chars) / static_cast<double>(lyrics.size());
     if (char_per_tag < 4.0) {
         return LrcType::WordSync;
     }
     return LrcType::LineSync;
 }
 
-LrcParser::LrcFile LrcParser::wordToLine(const LrcFile& lrc) {
+LrcParser::LrcFile LrcParser::word_to_line(const LrcFile& lrc)
+{
     using LrcType = LrcParser::LrcType;
 
     if (lrc.lyrics.empty() || lrc.type != LrcType::WordSync) {
@@ -420,8 +512,8 @@ LrcParser::LrcFile LrcParser::wordToLine(const LrcFile& lrc) {
     }
 
     LrcFile file;
-    file.metadata = lrc.metadata;
-    file.type = LrcType::LineSync;
+    file.metadata            = lrc.metadata;
+    file.type                = LrcType::LineSync;
 
     uint64_t line_start_time = 0;
     std::string line_text;
@@ -430,11 +522,11 @@ LrcParser::LrcFile LrcParser::wordToLine(const LrcFile& lrc) {
     for (const auto& unit : lrc.lyrics) {
         if (!line_opened) {
             line_start_time = unit.time_ms;
-            line_opened = true;
+            line_opened     = true;
         }
 
         line_text += unit.text;
-        if (unit.text.find('\n') != std::string::npos) {
+        if (unit.text.contains('\n')) {
             file.lyrics.push_back({line_start_time, line_text});
             line_text.clear();
             line_opened = false;
@@ -448,18 +540,21 @@ LrcParser::LrcFile LrcParser::wordToLine(const LrcFile& lrc) {
     return file;
 }
 
-LrcParser::LrcFile LrcParser::convertEncoding(const LrcFile& lrc, const std::string& dst_encoding) {
+LrcParser::LrcFile LrcParser::convert_encoding(const LrcFile& lrc,
+                                               const std::string& dst_encoding)
+{
     if (dst_encoding.empty() || iequals(dst_encoding, "UTF-8")) {
         return lrc;
     }
 
-    LrcFile converted = lrc;
+    LrcFile converted  = lrc;
 
     auto convert_field = [&dst_encoding](std::string& field) {
         if (field.empty()) {
             return;
         }
-        std::string out = LrcParser::convertFormat(field, dst_encoding, "UTF-8");
+        std::string out =
+            LrcParser::convert_format(field, dst_encoding, "UTF-8");
         if (!out.empty()) {
             field = std::move(out);
         }
@@ -472,7 +567,7 @@ LrcParser::LrcFile LrcParser::convertEncoding(const LrcFile& lrc, const std::str
     std::unordered_map<std::string, std::string> converted_attrs;
     converted_attrs.reserve(converted.metadata.attributes.size());
     for (const auto& kv : converted.metadata.attributes) {
-        std::string key = kv.first;
+        std::string key   = kv.first;
         std::string value = kv.second;
         convert_field(key);
         convert_field(value);
@@ -487,10 +582,10 @@ LrcParser::LrcFile LrcParser::convertEncoding(const LrcFile& lrc, const std::str
     return converted;
 }
 
-
-size_t LrcParser::count_visible_chars(const std::string& str) {
+size_t LrcParser::count_visible_chars(const std::string& str)
+{
     size_t count = 0;
-    size_t i = 0;
+    size_t i     = 0;
     while (i < str.size()) {
         unsigned char c = static_cast<unsigned char>(str[i]);
 
@@ -502,11 +597,18 @@ size_t LrcParser::count_visible_chars(const std::string& str) {
 
         // judge UTF-8 char length
         size_t char_len = 1;
-        if ((c & 0x80) == 0)         char_len = 1;  // 0xxx_xxxx
-        else if ((c & 0xE0) == 0xC0) char_len = 2;  // 110x_xxxx
-        else if ((c & 0xF0) == 0xE0) char_len = 3;  // 1110_xxxx
-        else if ((c & 0xF8) == 0xF0) char_len = 4;  // 1111_0xxx
-        else char_len = 1;
+        if ((c & 0xE0) == 0xC0) {
+            char_len = 2;
+        } // 110x_xxxx
+        else if ((c & 0xF0) == 0xE0) {
+            char_len = 3;
+        } // 1110_xxxx
+        else if ((c & 0xF8) == 0xF0) {
+            char_len = 4;
+        } // 1111_0xxx
+        else {
+            char_len = 1;
+        }
 
         count++;
         i += char_len;

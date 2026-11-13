@@ -25,22 +25,22 @@ copy source code files to your directory, than add dependencies in your build fi
 
 # Usage
 
-1. create a `LrcParser` class.
-2. use `parseFile()` or `parseString()` to parse lrc file.
-3. use `getData()` to get result.
+1. create a `LrcParser` instance.
+2. use `parse_file()` or `parse_string()` to parse lrc file.
+3. use `get_data()` to get result.
 4. there are two static method:
-   1. `wordToLine()` to part word sync lyrics if use East Asia characters like Chinese or Japanese.
-   2. `convertEncoding()` to conver enconding if you need an enconding other than UTF-8, check enable keywords on [iconv official page](https://www.gnu.org/software/libiconv/).
+   1. `word_to_line()` to split word sync lyrics if use CJK which can not tokenize by space.
+   2. `convert_encoding()` to conver enconding if you need an enconding other than UTF-8, check enable keywords on [iconv official page](https://www.gnu.org/software/libiconv/).
 
 ## Encoding Behavior
 
 - Parser internal text is always UTF-8.
-- `parseFile()` / `parseString()` will auto-detect source encoding and convert to UTF-8 before parsing.
+- `parse_file()` / `parse_string()` will auto-detect source encoding and convert to UTF-8 before parsing.
 - If you need another output encoding, use static method:
 
 ```cpp
-LrcParser::LrcFile utf8_data = parser.getData();
-LrcParser::LrcFile gbk_data = LrcParser::convertEncoding(utf8_data, "GBK");
+LrcParser::LrcFile utf8_data = parser.get_data();
+LrcParser::LrcFile gbk_data = LrcParser::convert_encoding(utf8_data, "GBK");
 ```
 
 # Dependence

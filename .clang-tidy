@@ -1,0 +1,145 @@
+# ============================================================================
+# .clang-tidy -- clang-tidy 静态检查配置 (本文件由项目模板提供)
+#
+# 作用:
+#   为 clang-tidy (以及基于它的 clangd 等工具) 提供统一的检查规则, 使本地开发、
+#   编辑器诊断与 CI 保持一致。clang-tidy 会从"被检查文件所在目录"开始逐级向上
+#   查找 .clang-tidy, 因此本文件放在项目根目录即可对整个项目生效。
+#
+# 前置条件:
+#   需要先生成编译数据库 compile_commands.json。本项目 CMakePresets 默认把
+#   Debug 构建目录设为 build/debug (见 .clangd 中的 CompilationDatabase)。
+#
+# 常用命令:
+#   # 检查单个文件 (-p 指向含 compile_commands.json 的构建目录)
+#   clang-tidy -p build/debug src/main.cpp
+#
+#   # 批量检查整个项目
+#   run-clang-tidy -p build/debug
+#
+#   # 自动修复可修复的问题 (会按 FormatStyle 重新排版)
+#   run-clang-tidy -p build/debug -fix
+#
+#   # 查看当前最终生效的完整配置 (含各检查项默认值)
+#   clang-tidy --dump-config -p build/debug
+#
+#   # 列出某个规则组下的全部检查项
+#   clang-tidy -list-checks -checks='modernize-*'
+#
+#   # 也可在配置 CMake 时开启 (每次编译都跑一遍 clang-tidy):
+#   #   cmake -DCMAKE_CXX_CLANG_TIDY=clang-tidy ...
+#
+# 说明:
+#   本文件是"基础配置", 侧重覆盖常见缺陷与现代化建议; 各项目可按需增删规则,
+#   TODO 处标注了常见需要按项目调整的位置。
+#
+# 参考文档:
+#   https://clang.llvm.org/extra/clang-tidy/checks/list.html
+#   https://clang.llvm.org/extra/clang-tidy/ (各检查项说明)
+# ============================================================================
+---
+# 检查规则列表。每条规则都是 glob, 前缀 '-' 表示关闭该项。
+# 规则按书写顺序生效: 后面的规则会覆盖前面的规则。
+Checks:
+  # ---- 基础: 先清空, 再以白名单方式开启, 避免工具升级后行为突变 ----
+  - '-*'                                    # 关闭所有检查, 作为白名单起点
+  - 'clang-diagnostic-*'                    # 编译器自身的诊断 (等价于 -Wall/-Wextra 的告警)
+
+  # ---- 缺陷检测类 (优先关注) ----
+  - 'clang-analyzer-*'                      # Clang 静态分析器: 空指针/内存/死代码等深度检查 (较慢)
+  - 'bugprone-*'                            # 常见易错写法: 悬垂引用/隐式转换/误用等
+
+  # ---- 规范与现代 C++ 建议 ----
+  - 'cppcoreguidelines-*'                   # C++ Core Guidelines 规则
+  - 'modernize-*'                           # 建议改用现代 C++ (nullptr/auto/using 等)
+  - 'performance-*'                         # 性能相关: 多余拷贝/临时对象等
+  - 'portability-*'                         # 可移植性: 平台相关写法
+  - 'readability-*'                         # 可读性: 命名/花括号/简化写法等
+  - 'misc-*'                                # 其它杂项检查
+
+  # ---- 关闭噪声大 / 主观性强的检查 (可按项目需要恢复) ----
+  - '-misc-use-anonymous-namespace'                        # 平常关闭, 阶段性统一检查
+  - '-performance-enum-size'                               # 无性能需求时应当使用默认类型
+  - '-portability-avoid-pragma-once'                       # 允许使用 pragma once
+  - '-modernize-avoid-c-arrays'                            # 本项目基本上使用已知长度的定长数组
+  - '-modernize-use-auto'                                  # 短明确类型无需 auto
+  - '-modernize-use-trailing-return-type'                  # 强制尾置返回类型, 与常见风格冲突
+  - '-modernize-use-designated-initializers'               # 结构体推荐不强制显示声明成员
+  - '-readability-function-cognitive-complexity'           # 面向 Catch2 测试宏封装
+  - '-readability-magic-numbers'                           # 魔法数字警告过多
+  - '-readability-uppercase-literal-suffix' 		           # hyw选项
+  - '-readability-simplify-boolean-expr'                   # 语义清晰优于公式最简, 编译器优化比人强...
+  - '-cppcoreguidelines-avoid-magic-numbers'               # 同上, 避免与上一条重复警告
+  - '-cppcoreguidelines-pro-bounds-constant-array-index'   # 仅使用枚举转换下标，警告为工具能力限制
+  - '-cppcoreguidelines-pro-bounds-pointer-arithmetic'     # 合法的指针运算会被误报
+  - '-cppcoreguidelines-pro-bounds-array-to-pointer-decay' # 数组退化为指针属正常用法
+  - '-cppcoreguidelines-pro-bounds-avoid-unchecked-container-access' # 允许下标直接访问容器, 无需边界检查
+  - '-cppcoreguidelines-pro-type-vararg'                   # printf 等 C 风格可变参数会被误报
+  - '-bugprone-easily-swappable-parameters'                # 相邻同类型参数极易误报
+  - '-misc-non-private-member-variables-in-classes'        # 对 struct/DTO 误报较多
+  - '-readability-identifier-length'                       # 短变量名 (i, x) 警告较烦
+  - '-misc-include-cleaner'                                # IWYU 式 include 检查, 初期噪声很大
+
+# 把匹配的告警升级为错误 (通常只在 CI 打开, 本地保持为空以便开发):
+#   ''    不升级 (默认)
+#   '*'   全部升级
+#   也可写 glob, 例如 'bugprone-*'
+WarningsAsErrors: ''
+
+# 只对匹配该正则的头文件输出诊断; 空字符串 = 所有非系统头文件。
+# 建议收紧到本项目目录, 忽略第三方/系统头文件噪声, 例如:
+#   'src/.*|include/.*|test/.*'
+HeaderFilterRegex: 'src/.*|include/.*|test/.*'
+
+# 匹配源文件类型, 可添加模块文件, 例如'cppm'/'ixx'(MSVC风格)
+ImplementationFileExtensions: ['c', 'cc', 'cpp', 'cxx']
+
+# 在 HeaderFilterRegex 命中的集合中, 再排除掉匹配该正则的文件。
+ExcludeHeaderFilterRegex: ''
+
+# 自动修复 (-fix) 时采用的排版风格:
+#   'file'  读取同目录/上级的 .clang-format (推荐, 与项目格式化保持一致)
+#   'none'  只改代码, 不重新排版
+#   也可直接内联 clang-format 配置字符串
+FormatStyle: file
+
+# 是否输出系统头文件 (标准库/第三方) 中的诊断, 默认 false。
+SystemHeaders: false
+
+# 终端彩色输出; 命令行 --use-color 可覆盖此项。
+UseColor: true
+
+# 是否在读取本文件后再继承父目录的 .clang-tidy。
+# 作为项目根配置保持 false, 以保证不同机器/CI 结果可复现。
+InheritParentConfig: false
+
+# 各检查项的参数 (键 = 检查名.选项名, 值按检查项约定)。
+CheckOptions:
+  # ---- 命名约定 (readability-identifier-naming) ----
+  # 注意: 区分 CamelCase 与 camelCase, 建议使用 PascalCase 描述
+  # 未列出的类别不做检查; TODO: 按团队规范调整大小写与前后缀。
+  readability-identifier-naming.NamespaceCase: lower_case     # 命名空间
+  readability-identifier-naming.ClassCase: CamelCase          # 类
+  readability-identifier-naming.StructCase: CamelCase         # 结构体
+  readability-identifier-naming.EnumCase: CamelCase           # 枚举类型
+  # 枚举使用enum class, 因此是PascalCase
+  readability-identifier-naming.EnumConstantCase: CamelCase
+  readability-identifier-naming.FunctionCase: lower_case      # 函数
+  readability-identifier-naming.VariableCase: lower_case      # 变量
+  readability-identifier-naming.ParameterCase: lower_case     # 形参
+  readability-identifier-naming.MemberCase: lower_case        # 公有成员
+  readability-identifier-naming.PrivateMemberSuffix: '_'      # 私有成员后缀 '_'
+  # 常量, 仅针对constexpr使用, 以'k'为前缀, 后续为 PascalCase
+  # const 使用一般命名
+  readability-identifier-naming.GlobalConstexprVariablePrefix: 'k'
+  readability-identifier-naming.GlobalConstexprVariableCase: CamelCase
+  readability-identifier-naming.GlobalConstantPrefix: 'g'
+  readability-identifier-naming.GlobalConstantCase: CamelCase
+
+  # ---- 其它常用检查项参数 ----
+  # 即使 if/for 只有一条语句也强制加花括号 (0 = 总是加)。
+  readability-braces-around-statements.ShortStatementLines: '0'
+  # 仅当类型名足够长时才建议改用 auto, 避免 auto 泛滥。
+  modernize-use-auto.MinTypeNameLength: '5'
+  # do-while 宏 (常见于断言/日志宏) 不触发 avoid-do-while 告警。
+  cppcoreguidelines-avoid-do-while.IgnoreMacros: 'true'
